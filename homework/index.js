@@ -105,7 +105,7 @@
         createAndAppend('div', root, { text: err.message, class: 'alert-error' });
       } else {
         console.log('contributors', data);
-        const header = createAndAppend('p', root, {
+        createAndAppend('p', root, {
           class: 'contributor-header',
           text: 'Contributions',
         });
