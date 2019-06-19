@@ -1,19 +1,22 @@
 'use strict';
 
 {
-  function fetchJSON(url, cb) {
-    const xhr = new XMLHttpRequest();
-    xhr.open('GET', url);
-    xhr.responseType = 'json';
-    xhr.onload = () => {
-      if (xhr.status < 400) {
-        cb(null, xhr.response);
-      } else {
-        cb(new Error(`Network error: ${xhr.status} - ${xhr.statusText}`));
-      }
-    };
-    xhr.onerror = () => cb(new Error('Network request failed'));
-    xhr.send();
+  function fetchJSON(url) {
+    const p = new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('GET', url);
+      xhr.responseType = 'json';
+      xhr.onload = () => {
+        if (xhr.status < 400) {
+          resolve(xhr.response);
+        } else {
+          reject(new Error(`Network error: ${xhr.status} - ${xhr.statusText}`));
+        }
+      };
+      xhr.onerror = () => reject(new Error('Network request failed'));
+      xhr.send();
+    });
+    return p;
   }
 
   function createAndAppend(name, parent, options = {}) {
@@ -28,27 +31,6 @@
       }
     });
     return elem;
-  }
-
-  function renderHeader(root, data) {
-    // extract repo id, repo name from data
-    const optionData = data.map(repo => ({ value: repo.id, text: repo.name }));
-
-    const header = createAndAppend('div', root, { class: 'header', text: 'HYF repositories' });
-    const repos = createAndAppend('select', header, {
-      name: 'repositoryList',
-      class: 'repository-list',
-    });
-    // populate the options
-    optionData.forEach(values => createAndAppend('option', repos, values));
-    console.log('initial', repos.options[repos.selectedIndex].value);
-    // register an onchange event on the select
-    repos.addEventListener('change', e => {
-      console.log('eventy', e);
-      repoDetails(null, data, e.target);
-      contributorDetails(null, data, e.target);
-    });
-    return { header, repos };
   }
 
   const newRow = (parentTable, label, content) => {
@@ -94,27 +76,6 @@
     return root;
   }
 
-  function contributorDetails(parent, data, repos) {
-    const root = parent === null ? document.getElementById('contributorsCard') : parent;
-    // clear data
-    root.innerHTML = '';
-    const repoData = activeRepo(data, repos);
-    // fetch the contributors data
-    fetchJSON(repoData.contributors_url, (err, data) => {
-      if (err) {
-        createAndAppend('div', root, { text: err.message, class: 'alert-error' });
-      } else {
-        console.log('contributors', data);
-        createAndAppend('p', root, {
-          class: 'contributor-header',
-          text: 'Contributions',
-        });
-        const ul = createAndAppend('ul', root, { class: 'contributor-list' });
-        data.map(profile => ul.appendChild(renderContributor(profile)));
-      }
-    });
-  }
-
   function renderContributor(profile) {
     const li = document.createElement('li');
     li.setAttribute('class', 'contributor-item');
@@ -133,13 +94,47 @@
     return li;
   }
 
-  // <li class="contributor-item" aria-label="mkruijt" tabindex="0">
-  //   <img src="https://avatars2.githubusercontent.com/u/7113309?v=4" class="contributor-avatar" height="48">
-  //   <div class="contributor-data">
-  //     <div>mkruijt</div>
-  //     <div class="contributor-badge">28</div>
-  //   </div>
-  // </li>
+  function contributorDetails(parent, data, repos) {
+    const root = parent === null ? document.getElementById('contributorsCard') : parent;
+    // clear data
+    root.innerHTML = '';
+    const repoData = activeRepo(data, repos);
+    // fetch the contributors data
+    fetchJSON(repoData.contributors_url)
+      .then(contributors => {
+        createAndAppend('p', root, { class: 'contributor-header', text: 'Contributions' });
+        const ul = createAndAppend('ul', root, { class: 'contributor-list' });
+        // possibly there are no contributors
+        if (contributors) {
+          contributors.map(profile => ul.appendChild(renderContributor(profile)));
+        } else {
+          createAndAppend('li', ul, {
+            text: 'No Contributors (yet!)',
+            class: 'contributor-item',
+          });
+        }
+      })
+      .catch(err => createAndAppend('div', root, { text: err.message, class: 'alert-error' }));
+  }
+
+  function renderHeader(root, data) {
+    // extract repo id, repo name from data
+    const optionData = data.map(repo => ({ value: repo.id, text: repo.name }));
+
+    const header = createAndAppend('div', root, { class: 'header', text: 'HYF repositories' });
+    const repos = createAndAppend('select', header, {
+      name: 'repositoryList',
+      class: 'repository-list',
+    });
+    // populate the options
+    optionData.forEach(values => createAndAppend('option', repos, values));
+    // register an onchange event on the select
+    repos.addEventListener('change', e => {
+      repoDetails(null, data, e.target);
+      contributorDetails(null, data, e.target);
+    });
+    return { header, repos };
+  }
 
   function renderContent(root, data) {
     // blue bit at top of page
@@ -155,20 +150,16 @@
       id: 'contributorsCard',
     });
     // fill in the content for the repo
-    const repoCardDetails = repoDetails(repoDetailsCard, data, repos);
+    repoDetails(repoDetailsCard, data, repos);
     // populate the contributors card
-    const filledContributors = contributorDetails(contributorsCard, data, repos);
+    contributorDetails(contributorsCard, data, repos);
   }
 
   function main(url) {
-    fetchJSON(url, (err, data) => {
-      const root = document.getElementById('root');
-      if (err) {
-        createAndAppend('div', root, { text: err.message, class: 'alert-error' });
-      } else {
-        renderContent(root, data);
-      }
-    });
+    const root = document.getElementById('root');
+    fetchJSON(url)
+      .then(data => renderContent(root, data))
+      .catch(err => createAndAppend('div', root, { text: err.message, class: 'alert-error' }));
   }
 
   const HYF_REPOS_URL = 'https://api.github.com/orgs/HackYourFuture/repos?per_page=100';
