@@ -2,6 +2,11 @@
   color: red;
 }
 
+body {
+  width: 80%;
+  margin: auto;
+}
+
 #root {
   width: 80%;
   margin: auto;
@@ -100,3 +105,18 @@
   color: white;
   border-radius: 4px;
 }
+
+@media (max-width: 767px) {
+  body {
+    width: 100%;
+  }
+  .content {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .leftDiv {
+    width: 100%;
+  }
+  .rightDiv {
+    width: 100%;
+  }
